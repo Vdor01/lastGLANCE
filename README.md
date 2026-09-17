@@ -196,6 +196,7 @@ lastGLANCE is configured entirely in-app. A couple of environment variables are 
 |---|---|---|
 | `VITE_WEBDAV_PROXY_URL` | No | Base URL of a [WebDAV CORS proxy](https://github.com/krelltunez/lastGLANCE/tree/main/api) to relay requests when the WebDAV server doesn't allow browser requests directly. Leave unset to use the same-origin proxy bundled with the Docker image. |
 | `VITE_WEBDAV_DIRECT` | No | Set to `true` to skip the CORS proxy entirely and connect straight to your WebDAV server from the browser. Use this only when your server sends permissive CORS headers or sits behind a reverse proxy that handles CORS — otherwise sync requests will fail CORS. Leave unset to keep using the proxy. |
+| `WEBDAV_PROXY_BLOCK_PRIVATE` | No | Runtime (not build time), for the Docker image's bundled proxy. The proxy reaches WebDAV servers on your own network by default, since that is the point of self-hosting, while always refusing the cloud metadata endpoint and other reserved ranges and pinning each connection to a validated address. Set to `1` if your instance is reachable by people you would rather not let relay requests into your network: private and LAN targets are then refused too, matching the cloud deployment. |
 
 Create a `.env.local` for local development:
 

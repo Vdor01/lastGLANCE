@@ -30,10 +30,56 @@ export function isPrivateIPv4(address) {
     a === 127 ||                          // loopback
     (a === 100 && b >= 64 && b <= 127) || // CGNAT 100.64/10
     (a === 169 && b === 254) ||           // link-local (cloud metadata)
+    (a === 192 && b === 0 && parts[2] === 0) || // IETF protocol assignments
     (a === 172 && b >= 16 && b <= 31) ||  // private
     (a === 192 && b === 168) ||           // private
     (a === 198 && (b === 18 || b === 19)) || // benchmarking 198.18/15
     a >= 224                              // multicast, reserved, broadcast
+  );
+}
+
+// The subset of the above that NO deployment may reach, self-hosted included.
+// A self-hoster's WebDAV server legitimately sits on 10/8, 192.168/16, 127/8 or
+// a Tailscale 100.64/10 address; none of them sits on the cloud metadata
+// endpoint, on multicast, or in reserved space, so those stay refused even when
+// private targets are allowed. Unparseable input is in here too: it is refused
+// rather than guessed at, in either posture.
+export function isAlwaysBlockedIPv4(address) {
+  const parts = address.split('.').map(Number);
+  if (parts.length !== 4 || parts.some(n => !Number.isInteger(n) || n < 0 || n > 255)) {
+    return true; // unparseable: refuse rather than guess
+  }
+  const [a, b] = parts;
+  return (
+    a === 0 ||                               // "this network"
+    (a === 169 && b === 254) ||              // link-local (cloud metadata)
+    (a === 192 && b === 0 && parts[2] === 0) || // IETF protocol assignments
+    (a === 198 && (b === 18 || b === 19)) || // benchmarking 198.18/15
+    a >= 224                                 // multicast, reserved, broadcast
+  );
+}
+
+export function isAlwaysBlockedIPv6(address) {
+  const addr = address.toLowerCase().replace(/%.*$/, '');
+  if (addr === '::') return true;            // unspecified
+  if (addr === '::1') return false;          // loopback is private, not always
+  const mapped = addr.match(/^::ffff:(.+)$/);
+  if (mapped) {
+    const tail = mapped[1];
+    if (tail.includes('.')) return isAlwaysBlockedIPv4(tail);
+    const groups = tail.split(':');
+    if (groups.length !== 2) return true;
+    const hi = parseInt(groups[0], 16);
+    const lo = parseInt(groups[1], 16);
+    if (Number.isNaN(hi) || Number.isNaN(lo)) return true;
+    return isAlwaysBlockedIPv4(`${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`);
+  }
+  const first = parseInt(addr.split(':')[0] || '0', 16);
+  return (
+    Number.isNaN(first) ||
+    first === 0 ||                          // ::/16 reserved, v4-compatible
+    (first >= 0xfe80 && first <= 0xfebf) || // link-local fe80::/10
+    first >= 0xff00                         // multicast ff00::/8
   );
 }
 
@@ -63,11 +109,32 @@ export function isPrivateIPv6(address) {
   );
 }
 
-// Resolve the hostname, reject if ANY returned address is private/reserved,
-// and return one validated address for the connection to pin. IPv4 preferred:
-// hand-picking an address forgoes Node's family fallback, and a host with a
-// broken-but-advertised AAAA record must not lose the IPv4 path it uses today.
-async function resolvePinnedAddress(hostname) {
+// Private/LAN targets are legitimate on a self-hosted instance and never on the
+// cloud deployment, so the posture is chosen per environment rather than baked
+// in. Same variable name the sibling GLANCE apps use, so anyone self-hosting
+// more than one configures them identically.
+const blockPrivateRequested = () =>
+  process.env.WEBDAV_PROXY_BLOCK_PRIVATE === '1' ||
+  process.env.WEBDAV_PROXY_BLOCK_PRIVATE === 'true';
+
+// On Vercel: refuse private targets. Self-hosted: allow them, unless the
+// operator asks for the cloud lock-down.
+export const defaultAllowPrivate = () => !process.env.VERCEL && !blockPrivateRequested();
+
+// Resolve the hostname, refuse if ANY returned address is disallowed under the
+// posture, and return every validated address for the connection to pin to.
+//
+// This now runs in BOTH postures. It used to be skipped entirely when private
+// targets were allowed, which meant a self-hosted instance did no checking at
+// all: the cloud metadata endpoint was reachable through it, and because the
+// pin is derived from this result, self-hosters got no rebinding protection
+// either. Allowing the LAN does not require allowing everything.
+//
+// Every validated address is returned, IPv4 first, rather than one hand-picked
+// address: pinning to a single address would forgo Node's family fallback, so a
+// host advertising a broken AAAA alongside a working A record would lose the
+// IPv4 path it uses today.
+async function resolveValidatedAddresses(hostname, allowPrivate) {
   let addresses;
   try {
     addresses = await lookup(hostname, { all: true, verbatim: true });
@@ -78,21 +145,18 @@ async function resolvePinnedAddress(hostname) {
     throw new Error('Could not resolve hostname');
   }
   for (const { address, family } of addresses) {
-    if (family === 4 ? isPrivateIPv4(address) : isPrivateIPv6(address)) {
+    const always = family === 4 ? isAlwaysBlockedIPv4(address) : isAlwaysBlockedIPv6(address);
+    const priv = family === 4 ? isPrivateIPv4(address) : isPrivateIPv6(address);
+    if (always || (priv && !allowPrivate)) {
       throw new Error('Private/reserved addresses are not allowed');
     }
   }
-  return addresses.find(a => a.family === 4) ?? addresses[0];
+  return [...addresses.filter(a => a.family === 4), ...addresses.filter(a => a.family !== 4)];
 }
 
-// Returns { parsed, pinned }. pinned is null when not enforcing; otherwise the
-// validated { address, family } the socket must connect to.
-//
-// Only enforce private-address restrictions on Vercel (SSRF protection for the
-// cloud-hosted deployment). Self-hosted instances run on the user's own
-// network where private addresses are legitimate WebDAV targets — no
-// resolution happens there at all, so their behavior is unchanged.
-export async function validateProxyUrl(urlString, enforce = !!process.env.VERCEL) {
+// Returns { parsed, pinned }, where pinned is the list of validated
+// { address, family } entries the socket must connect to.
+export async function validateProxyUrl(urlString, { allowPrivate = defaultAllowPrivate() } = {}) {
   let parsed;
   try {
     parsed = new URL(urlString);
@@ -104,10 +168,8 @@ export async function validateProxyUrl(urlString, enforce = !!process.env.VERCEL
     throw new Error('Only http and https URLs are allowed');
   }
 
-  if (!enforce) return { parsed, pinned: null };
-
   // URL.hostname wraps IPv6 literals in brackets; dns.lookup wants them bare.
-  const pinned = await resolvePinnedAddress(parsed.hostname.replace(/^\[|\]$/g, ''));
+  const pinned = await resolveValidatedAddresses(parsed.hostname.replace(/^\[|\]$/g, ''), allowPrivate);
   return { parsed, pinned };
 }
 
@@ -143,10 +205,10 @@ function proxyRequest(method, targetUrl, headers, body, pinned = null) {
     // changes between validation and connect (rebinding) never reaches the
     // socket. Node may call lookup in `all` mode (happy-eyeballs) or not —
     // serve both shapes.
-    if (pinned) {
+    if (pinned && pinned.length) {
       options.lookup = (host, opts, cb) => {
-        if (opts && opts.all) cb(null, [{ address: pinned.address, family: pinned.family }]);
-        else cb(null, pinned.address, pinned.family);
+        if (opts && opts.all) cb(null, pinned);
+        else cb(null, pinned[0].address, pinned[0].family);
       };
     }
 
