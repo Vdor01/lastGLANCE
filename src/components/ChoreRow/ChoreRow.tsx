@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Check, Pencil, Trash2, GripVertical, Bell, Leaf, FileText } from 'lucide-react'
 import type { ChoreWithLastCompletion } from '@/types'
-import { getFillRatio, getCadenceColor, formatElapsed } from '@/utils/cadence'
+import { getFillRatio, getCadenceColor, formatElapsed, formatNextDue } from '@/utils/cadence'
 import { logCompletion } from '@/db/queries'
 import { getMeUserSyncId } from '@/multiuser/settings'
 import { ICON_REGISTRY } from '@/icons/registry'
@@ -38,6 +38,7 @@ export function ChoreRow({ chore, editMode, onTap, onEdit, onDelete, onRefresh, 
   const fillColor = ratio !== null ? getCadenceColor(ratio) : '#64748b'
   const fillWidth = ratio !== null ? `${Math.min(ratio * 100, 100)}%` : '0%'
   const elapsedText = formatElapsed(t, chore.elapsed_days, chore.last_completed_at)
+  const nextDueText = formatNextDue(t, chore.elapsed_days, chore.target_cadence_days) == "" ? "" : ` - ${formatNextDue(t, chore.elapsed_days, chore.target_cadence_days)}`
 
   const ChoreIcon = chore.icon ? ICON_REGISTRY[chore.icon] : null
 
@@ -163,7 +164,7 @@ export function ChoreRow({ chore, editMode, onTap, onEdit, onDelete, onRefresh, 
               ) : null
             })}
           </p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 tabular-nums mt-0.5">{elapsedText}</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 tabular-nums mt-0.5">{elapsedText}<i>{nextDueText}</i></p>
         </div>
 
         {/* Send to dayGLANCE button */}

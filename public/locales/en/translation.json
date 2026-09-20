@@ -177,6 +177,12 @@
     "yesterday": "yesterday",
     "daysAgo": "{{count}}d ago"
   },
+  "nextDue": {
+    "overdue": "overdue",
+    "today": "today",
+    "tomorrow": "tomorrow",
+    "inDays": "in {{count}}d"
+  },
   "heatmap": {
     "completions_one": "{{count}} completion",
     "completions_other": "{{count}} completions",
