@@ -38,7 +38,8 @@ export function ChoreRow({ chore, editMode, onTap, onEdit, onDelete, onRefresh, 
   const fillColor = ratio !== null ? getCadenceColor(ratio) : '#64748b'
   const fillWidth = ratio !== null ? `${Math.min(ratio * 100, 100)}%` : '0%'
   const elapsedText = formatElapsed(t, chore.elapsed_days, chore.last_completed_at)
-  const nextDueText = formatNextDue(t, chore.elapsed_days, chore.target_cadence_days) == "" ? "" : ` - ${formatNextDue(t, chore.elapsed_days, chore.target_cadence_days)}`
+  const nextDue = formatNextDue(t, chore.elapsed_days, chore.target_cadence_days)
+  const nextDueText = nextDue ? ` - ${nextDue}` : ''
 
   const ChoreIcon = chore.icon ? ICON_REGISTRY[chore.icon] : null
 
