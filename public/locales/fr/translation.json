@@ -177,6 +177,13 @@
     "yesterday": "hier",
     "daysAgo": "il y a {{count}} j"
   },
+  "nextDue": {
+    "dueNow": "à faire maintenant",
+    "today": "aujourd'hui",
+    "tomorrow": "demain",
+    "inDays": "dans {{count}} j",
+    "combined": "{{elapsed}}<1> - {{due}}</1>"
+  },
   "heatmap": {
     "completions_one": "{{count}} réalisation",
     "completions_other": "{{count}} réalisations",

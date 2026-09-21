@@ -8,7 +8,7 @@ import { ICON_REGISTRY } from '@/icons/registry'
 import { useIntents } from '@/intents/IntentsContext'
 import { emitCreateIntent } from '@/intents/emitter'
 import { useUsersContext } from '@/multiuser/UsersContext'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 
 interface Props {
   chore: ChoreWithLastCompletion
@@ -38,8 +38,7 @@ export function ChoreRow({ chore, editMode, onTap, onEdit, onDelete, onRefresh, 
   const fillColor = ratio !== null ? getCadenceColor(ratio) : '#64748b'
   const fillWidth = ratio !== null ? `${Math.min(ratio * 100, 100)}%` : '0%'
   const elapsedText = formatElapsed(t, chore.elapsed_days, chore.last_completed_at)
-  const nextDue = formatNextDue(t, chore.elapsed_days, chore.target_cadence_days)
-  const nextDueText = nextDue ? ` - ${nextDue}` : ''
+  const nextDue = formatNextDue(t, chore.target_cadence_days, chore.elapsed_days, chore.last_completed_at)
 
   const ChoreIcon = chore.icon ? ICON_REGISTRY[chore.icon] : null
 
@@ -165,7 +164,13 @@ export function ChoreRow({ chore, editMode, onTap, onEdit, onDelete, onRefresh, 
               ) : null
             })}
           </p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 tabular-nums mt-0.5">{elapsedText}<i>{nextDueText}</i></p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 tabular-nums mt-0.5">
+            {nextDue ? (
+              <Trans i18nKey="nextDue.combined" values={{ elapsed: elapsedText, due: nextDue }} components={{ 1: <span className="italic" /> }} />
+            ) : (
+              elapsedText
+            )}
+          </p>
         </div>
 
         {/* Send to dayGLANCE button */}

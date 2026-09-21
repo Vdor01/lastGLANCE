@@ -177,6 +177,13 @@
     "yesterday": "昨天",
     "daysAgo": "{{count}} 天前"
   },
+  "nextDue": {
+    "dueNow": "现在到期",
+    "today": "今天",
+    "tomorrow": "明天",
+    "inDays": "{{count}} 天后",
+    "combined": "{{elapsed}}<1> - {{due}}</1>"
+  },
   "heatmap": {
     "completions_one": "{{count}} 条完成记录",
     "completions_other": "{{count}} 条完成记录",

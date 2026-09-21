@@ -88,11 +88,17 @@ export function formatElapsed(t: TFunction, elapsedDays: number | null, lastComp
   return t('elapsed.daysAgo', { count: calendarDaysAgo })
 }
 
-export function formatNextDue(t: TFunction, elapsedDays: number | null, targetCadenceDays: number | null): string {
-  if (elapsedDays === null || targetCadenceDays === null) return ""
-  const nextDueInDays = targetCadenceDays - elapsedDays
-  if (nextDueInDays < 0) return t('nextDue.overdue')
-  if (nextDueInDays === 0) return t('nextDue.today')
-  if (nextDueInDays === 1) return t('nextDue.tomorrow')
-  return t('nextDue.inDays', { count: nextDueInDays })
+export function formatNextDue(
+  t: TFunction,
+  targetCadenceDays: number | null,
+  elapsedDays: number | null,
+  lastCompletedAt: string | null,
+): string {
+  if (elapsedDays === null || targetCadenceDays === null || lastCompletedAt === null) return ''
+  if (isPastCadence(targetCadenceDays, elapsedDays)) return t('nextDue.dueNow')
+  const dueDate = dayjs(lastCompletedAt).add(targetCadenceDays, 'day')
+  const daysUntil = dueDate.startOf('day').diff(dayjs().startOf('day'), 'day')
+  if (daysUntil === 0) return t('nextDue.today')
+  if (daysUntil === 1) return t('nextDue.tomorrow')
+  return t('nextDue.inDays', { count: daysUntil })
 }
